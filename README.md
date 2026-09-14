@@ -1,3 +1,5 @@
+# Module outline
+
 The `sent_logic` module implements:
 
 - The tree representation for the syntax of classical sentential logic
@@ -19,7 +21,7 @@ sentences and implements:
 the DPLL algorithm. More specifically: This solver uses unit propagation with
 watched literals and guessing with chronological backtracking. The guessing
 heuristic is static Jeroslow-Wang. It does not use pure literal elimination,
-which is part of the original DPLL algorithm. It also does not implement clease
+which is part of the original DPLL algorithm. It also does not implement clause
 learning.
 
 Finally, `sent_logic.sat.solver_cdcl` implements a SAT solver based on the CDCL
@@ -27,5 +29,18 @@ algorithm. More specifically: This solver also uses watched literals for unit
 propagation, but it also implements clause learning and non-chronological
 backtracking. The heuristic used in guessing is VSIDS with phase saving.
 
-`tests/sent_logic/sat.py` tests the solvers on randomly generated CNFs. (The
-results from the solvers are compared to brute-force results.)
+# Tests
+
+Tests for the solvers are located at `test/sent_logic/test_sat.py`. Firstly, the
+solvers are tested on small instances. We solve these instances using the solver
+and using the brute-force method (something that would not be feasible with
+large instances) and compare the results. Secondly, the solvers are tested on
+large instances. In these second tests, we only check that purported satisfying
+assignments produced by the solver actually satisfy the clauses.
+
+To run the tests:
+
+```
+pip install .
+python -m unittest discover -s test/sent_logic
+```

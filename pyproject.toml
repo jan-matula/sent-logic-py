@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sent-logic"
 authors = [{name = "Jan Matula"}]
-readme = "README.txt"
+readme = "README.md"
 version = "0.1.0"
 requires-python = ">=3.12"
 

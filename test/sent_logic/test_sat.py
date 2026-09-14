@@ -1,3 +1,8 @@
+"""
+Tests the solvers on randomly generated instances and checks the results against
+the brute-force method.
+"""
+
 import random
 import unittest
 
@@ -7,12 +12,7 @@ from sent_logic.sat import (
   eval_clauses,
   solve_brute_force,
 )
-from sent_logic.sat.solver_dpll import solve
-
-# ==============================================================================
-# Solver tests
-# ==============================================================================
-
+from sent_logic.sat.solver_cdcl import solve
 
 # Random CNF generation
 # ------------------------------------------------------------------------------
@@ -57,23 +57,29 @@ class TestSolverEdge(unittest.TestCase):
     self.assertFalse(result.sat)
 
 
-class TestSolverRandom(unittest.TestCase):
+class TestSolverRandomChecked(unittest.TestCase):
   num_vars: int = 10
   num_clauses: int = 20
   clause_len: int = 3
-  num_trails: int = 500
+  num_trials: int = 500
   seed: int = 472
 
   def runTest(self):
     rng = random.Random(self.seed)
 
-    for trial_index in range(self.num_trails):
+    for trial_index in range(self.num_trials):
       with self.subTest(trial=trial_index):
         clauses = random_cnf(
           self.num_vars, self.num_clauses, self.clause_len, rng
         )
         expected = solve_brute_force(clauses)
-        result = solve(clauses)
+
+        try:
+          result = solve(clauses)
+        except AssertionError:
+          self.fail(
+            "Solver failed due to an internal error.\n" + f"clauses={clauses}"
+          )
 
         if not expected.sat:
           self.assertFalse(
@@ -87,6 +93,32 @@ class TestSolverRandom(unittest.TestCase):
             "Solver reported UNSAT but instance is SAT.\n"
             + f"clauses={clauses}\nexample satisfying assignment={expected.vln}",
           )
+          assert result.vln is not None
+          self.assertTrue(
+            eval_clauses(clauses, result.vln),
+            "Solver's assignment does not satisfy all clauses.\n"
+            + f"clauses={clauses}\nsolver assignment={result.vln}",
+          )
+
+
+class TestSolverRandomUnchecked(unittest.TestCase):
+  num_vars: int = 100
+  num_clauses: int = 400
+  clause_len: int = 3
+  num_trials: int = 10
+  seed: int = 472
+
+  def runTest(self):
+    rng = random.Random(self.seed)
+
+    for trial_index in range(self.num_trials):
+      with self.subTest(trial=trial_index):
+        clauses = random_cnf(
+          self.num_vars, self.num_clauses, self.clause_len, rng
+        )
+        result = solve(clauses)
+
+        if result.sat:
           assert result.vln is not None
           self.assertTrue(
             eval_clauses(clauses, result.vln),

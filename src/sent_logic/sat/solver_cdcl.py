@@ -140,20 +140,20 @@ class _Solver:
 
   def decay(self):
     self.bump_amount /= self.decay_factor
-
-  def rescale_if_needed(self):
     if self.bump_amount > 1e100:
-      for var in self.var_scores:
-        self.var_scores[var] /= self.bump_amount
-      self.var_order = [(-score, var) for var, score in self.var_scores.items()]
-      heapq.heapify(self.var_order)
-      self.bump_amount = 1.0
+      self.rescale()
+
+  def rescale(self):
+    for var in self.var_scores:
+      self.var_scores[var] /= self.bump_amount
+    self.var_order = [(-score, var) for var, score in self.var_scores.items()]
+    heapq.heapify(self.var_order)
+    self.bump_amount = 1.0
 
   def choose_guess(self) -> Lit:
     while self.var_order:
-      neg_score, var = heapq.heappop(self.var_order)
-      # The entry could be superseded by a later bump.
-      if var not in self.assign_table and -neg_score == self.var_scores[var]:
+      _, var = heapq.heappop(self.var_order)
+      if var not in self.assign_table:
         return self.save_table.get(var, var)
 
     # Should be unreachable.
@@ -296,6 +296,8 @@ class _Solver:
     while self.assign_stack and self.assign_stack[-1].level > level:
       info = self.assign_stack.pop()
       var = abs(info.lit)
+      if info.reason is None:
+        heapq.heappush(self.var_order, (-self.var_scores[var], var))
       self.save_table[var] = info.lit
       del self.assign_table[var]
       del self.level_table[var]
@@ -315,6 +317,7 @@ class _Solver:
     while True:
       try:
         self.propagate()
+        assert self.assigned_vars <= self.total_vars
         if self.assigned_vars == self.total_vars:
           return SolverResult(True, _Solver.into_valuation(self.assign_table))
         lit = self.choose_guess()
