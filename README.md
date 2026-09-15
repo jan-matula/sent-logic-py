@@ -1,5 +1,7 @@
 # Module outline
 
+(For documentation, see the docstrings in the source files themselves.)
+
 The `sent_logic` module implements:
 
 - The tree representation for the syntax of classical sentential logic
@@ -57,13 +59,14 @@ eval_clauses(clauses, result.vln)
 
 # Tests
 
-Tests for the solvers are located at `test/sent_logic/test_sat_solver.py`.
+Tests for the solvers are located at `test/sent_logic/sat/test_solver.py`.
 Firstly, the solvers are tested on small instances. We solve these instances
 using the solver and using the brute-force method (something that would not be
 feasible with large instances) and compare the results. Secondly, the solvers
 are tested on large instances. In these second tests, we only check that
 purported satisfying assignments produced by the solver actually satisfy the
-clauses.
+clauses. (The solvers produce refutations when the clauses are unsatisfiable, so
+we do not have a way of feasibly checking the result in these cases.)
 
 To run the tests:
 
