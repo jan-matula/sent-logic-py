@@ -12,6 +12,9 @@ from sent_logic.sat import (
   eval_clauses,
   solve_brute_force,
 )
+
+# Note: To test the DPLL solver instead of the CDCL solver, `cdcl` needs to be
+# changed to `dpll` in the following line.
 from sent_logic.sat.solver_cdcl import solve
 
 # Random CNF generation
@@ -102,11 +105,11 @@ class TestSolverRandomChecked(unittest.TestCase):
 
 
 class TestSolverRandomUnchecked(unittest.TestCase):
-  num_vars: int = 100
-  num_clauses: int = 400
+  num_vars: int = 300
+  num_clauses: int = 1000
   clause_len: int = 3
   num_trials: int = 10
-  seed: int = 472
+  seed: int = 2
 
   def runTest(self):
     rng = random.Random(self.seed)

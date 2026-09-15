@@ -29,14 +29,41 @@ algorithm. More specifically: This solver also uses watched literals for unit
 propagation, but it also implements clause learning and non-chronological
 backtracking. The heuristic used in guessing is VSIDS with phase saving.
 
+# How to use the solvers
+
+The solvers reside in modules `sent_logic.sat.solver_dpll` and
+`sent_logic.sat.solver_cdcl` as functions named `solve`. The input to `solve`
+should be of type `list[list[int]]`. For example, the CNF `(v₁ | ~v₂ | ~v₃) &
+(~v₁ | v₂) & (~v₁ | v₃)` would be encoded as the list `[[1, -2, -3], [-1, 2],
+[-1, 3]]` (this CNF is equivalent to `v₁ <=> (v₂ & v₃)`). The output from
+`solve` is an object of type `SolverResult` with the following fields:
+
+- `sat: bool` which should be true if the input clauses are satisfiable.
+- `vln: dict[int, bool] | None` which should contain a satisfying assignment for
+  the input clauses whenever `sat` is set to true.
+
+For example:
+
+```
+from sent_logic.sat import eval_clauses
+from sent_logic.sat.solver_cdcl import solve
+
+clauses = [[1, -2, -3], [-1, 2], [-1, 3]]
+result = solve(clauses)
+#> SolverResult(sat=True, vln={1: True, 2: True, 3: True})
+eval_clauses(clauses, result.vln)
+#> True
+```
+
 # Tests
 
-Tests for the solvers are located at `test/sent_logic/test_sat.py`. Firstly, the
-solvers are tested on small instances. We solve these instances using the solver
-and using the brute-force method (something that would not be feasible with
-large instances) and compare the results. Secondly, the solvers are tested on
-large instances. In these second tests, we only check that purported satisfying
-assignments produced by the solver actually satisfy the clauses.
+Tests for the solvers are located at `test/sent_logic/test_sat_solver.py`.
+Firstly, the solvers are tested on small instances. We solve these instances
+using the solver and using the brute-force method (something that would not be
+feasible with large instances) and compare the results. Secondly, the solvers
+are tested on large instances. In these second tests, we only check that
+purported satisfying assignments produced by the solver actually satisfy the
+clauses.
 
 To run the tests:
 
@@ -44,3 +71,7 @@ To run the tests:
 pip install .
 python -m unittest discover -s test/sent_logic
 ```
+
+Note that, by default, the CDCL solver is used as the one being tested. To test
+the DPLL solver, one has to alter the source code of the test (see the file
+itself).
