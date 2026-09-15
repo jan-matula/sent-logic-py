@@ -46,7 +46,7 @@ should be of type `list[list[int]]`. For example, the CNF `(v₁ | ~v₂ | ~v₃
 
 For example:
 
-```
+```python
 from sent_logic.sat import eval_clauses
 from sent_logic.sat.solver_cdcl import solve
 
@@ -70,7 +70,7 @@ we do not have a way of feasibly checking the result in these cases.)
 
 To run the tests:
 
-```
+```bash
 pip install .
 python -m unittest discover -s test/sent_logic
 ```
