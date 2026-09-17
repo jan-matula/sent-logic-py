@@ -6,6 +6,7 @@ from .. import (
   Cond,
   Conn,
   ISent,
+  ISentNNF,
   IValuation,
   IVar,
   Not,
@@ -13,6 +14,7 @@ from .. import (
   Xor,
   fold,
   fresh_index,
+  into_nnf,
   valuations_,
 )
 
@@ -52,6 +54,39 @@ def nvars(clauses: Clauses) -> int:
   are among `{1, 2, ..., n}`.
   """
   return max(abs(lit) for clause in clauses for lit in clause)
+
+
+# Basic syntactical operations
+# ------------------------------------------------------------------------------
+
+
+def cnf_or(cnf1: Clauses, cnf2: Clauses) -> Clauses:
+  """
+  Returns a CNF equivalent to the disjunction of a pair of CNFs. Note that the
+  resulting CNF has `n * m` clauses when the arguments have `n` and `m` clauses
+  respectively.
+  """
+  return [clause1 + clause2 for clause1 in cnf1 for clause2 in cnf2]
+
+
+def into_cnf(sent: ISent) -> Clauses:
+  """
+  Converts an I-sentence into an equivalent CNF. Note that the size of the
+  resulting CNF can be exponential in the size of sentence. This function should
+  therefore be used mainly for small sentences.
+  """
+  sent_nnf: ISentNNF = into_nnf(sent)
+  return _nnf_into_cnf(sent_nnf)
+
+
+def _nnf_into_cnf(sent: ISentNNF) -> Clauses:
+  # fmt: off
+  match sent:
+    case Atom(IVar(v)):      return [[v]]
+    case Not(Atom(IVar(v))): return [[-v]]
+    case And(l, r):          return _nnf_into_cnf(l) + _nnf_into_cnf(r)
+    case Or(l, r):           return cnf_or(_nnf_into_cnf(l), _nnf_into_cnf(r))
+  # fmt: on
 
 
 # Basic semantics
@@ -99,7 +134,7 @@ def solve_brute_force(clauses: Clauses) -> SolverResult:
   return SolverResult(False, None)
 
 
-# Conversion into CNF
+# Conversion into equisatisfiable CNF
 # ------------------------------------------------------------------------------
 
 
@@ -161,6 +196,10 @@ class _CNFConverter:
 
 def into_clauses(sent: ISent) -> Clauses:
   """
-  Convert a sentence into an equisatisfiable CNF.
+  Convert a sentence into an equisatisfiable CNF. The size of the CNF and the
+  number of variables in the CNF are linear in the size of the sentence. Note
+  that CNF will contain variables not appearing the original sentence. This
+  means that one cannot, for example, obtain equisatisfiable CNF for `sent1 &
+  sent2` by combining the respective equisatisfiable CNFs for `sent1` and `sent2`.
   """
   return _CNFConverter(sent).get_clauses()

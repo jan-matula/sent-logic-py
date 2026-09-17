@@ -14,6 +14,8 @@ The `sent_logic` module implements:
 The `sent_logic.sat` module then defines the flat representation of CNF
 sentences and implements:
 
+- Transformation into an equivalent CNF sentence and some convenience functions
+  for generating clauses.
 - Semantical functions for the flat representation (evaluation, checking
   satisfiability by brute force)
 - Transformation of a sentence (tree representation) into an equisatisfiable

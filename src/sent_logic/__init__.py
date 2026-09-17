@@ -337,7 +337,7 @@ negations can attach only to atoms.
 """
 
 
-def into_nnf[A](sent: SentNAO[A]) -> SentNNF[A]:
+def into_nnf[A](sent: Sent[A]) -> SentNNF[A]:
   """
   Returns an equivalent NNF sentence. The size of the paraphrase is equal to the
   size of the original NAO sentence.
@@ -348,20 +348,26 @@ def into_nnf[A](sent: SentNAO[A]) -> SentNNF[A]:
     case Not(Atom(_)): return cast(Lit[A], sent)
     case Not(o):       return _into_nnf_aux(o)
     case And(l, r):    return And(into_nnf(l), into_nnf(r))
+    case Xor(l, r):    return Or(And(into_nnf(l), _into_nnf_aux(r)),
+                                 And(_into_nnf_aux(l), into_nnf(r)))
     case Or(l, r):     return Or(into_nnf(l), into_nnf(r))
+    case Cond(l, r):   return Or(_into_nnf_aux(l), into_nnf(r))
   # fmt: on
 
 
-def _into_nnf_aux[A](sent: SentNAO[A]) -> SentNNF[A]:
+def _into_nnf_aux[A](sent: Sent[A]) -> SentNNF[A]:
   """
   Returns an NNF sentence equivalent to the negation of the argument.
   """
   # fmt: off
   match sent:
-    case Atom(_):   return Not(sent)
-    case Not(o):    return into_nnf(o)
-    case And(l, r): return Or(_into_nnf_aux(l), _into_nnf_aux(r))
-    case Or(l, r):  return And(_into_nnf_aux(l), _into_nnf_aux(r))
+    case Atom(_):    return Not(sent)
+    case Not(o):     return into_nnf(o)
+    case And(l, r):  return Or(_into_nnf_aux(l), _into_nnf_aux(r))
+    case Xor(l, r):  return Or(And(into_nnf(l), into_nnf(r)),
+                               And(_into_nnf_aux(l), _into_nnf_aux(r)))
+    case Or(l, r):   return And(_into_nnf_aux(l), _into_nnf_aux(r))
+    case Cond(l, r): return And(into_nnf(l), _into_nnf_aux(r))
   # fmt: on
 
 
