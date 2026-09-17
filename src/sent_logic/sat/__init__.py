@@ -4,7 +4,6 @@ from .. import (
   And,
   Atom,
   Cond,
-  Conn,
   ISent,
   ISentNNF,
   IValuation,
@@ -12,7 +11,6 @@ from .. import (
   Not,
   Or,
   Xor,
-  fold,
   fresh_index,
   into_nnf,
   valuations_,
@@ -134,63 +132,225 @@ def solve_brute_force(clauses: Clauses) -> SolverResult:
   return SolverResult(False, None)
 
 
+# ==============================================================================
 # Conversion into equisatisfiable CNF
+# ==============================================================================
+
+
+# Internal DAG representation
+# ------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _NLit:
+  var: int
+  neg: bool = False
+
+  def negate(self) -> "_NLit":
+    return _NLit(self.var, not self.neg)
+
+  def as_int(self) -> int:
+    return -self.var if self.neg else self.var
+
+
+@dataclass(frozen=True)
+class _NAnd:
+  args: tuple["_Node", ...]
+
+
+@dataclass(frozen=True)
+class _NOr:
+  args: tuple["_Node", ...]
+
+
+@dataclass(frozen=True)
+class _NXor:
+  left: "_Node"
+  right: "_Node"
+
+
+type _Node = _NLit | _NAnd | _NOr | _NXor
+
+
+# CNF converter
 # ------------------------------------------------------------------------------
 
 
 class _CNFConverter:
   sent: ISent
   _fresh_index: int
-  clauses: list[list[int]]
+  clauses: Clauses
+  _memo: dict[tuple, _Node]
+  _vars: dict[_Node, int]
 
   def __init__(self, sent: ISent) -> None:
     self.sent = sent
     self._fresh_index = fresh_index(sent)
     self.clauses = []
+    self._memo = {}
+    self._vars = {}
 
   def fresh_index(self) -> int:
     i = self._fresh_index
     self._fresh_index += 1
     return i
 
-  def step(self, conn: Conn[IVar, int]) -> int:
+  # Interning / normalization
+  # ----------------------------------------------------------------------------
+
+  def _intern(self, key: tuple, node: _Node) -> _Node:
+    old = self._memo.get(key)
+    if old is not None:
+      return old
+    self._memo[key] = node
+    return node
+
+  def atom(self, i: int) -> _NLit:
+    return _NLit(i)
+
+  def make_and(self, args: list[_Node]) -> _Node:
+    # Flatten nested conjunctions.
+    flat: list[_Node] = []
+    for x in args:
+      if isinstance(x, _NAnd):
+        flat.extend(x.args)
+      else:
+        flat.append(x)
+
+    # Remove duplicated operands.
+    flat = list(set(flat))
+    assert flat
+
+    if len(flat) == 1:
+      return flat[0]
+
+    # Sort operands.
+    flat.sort(key=repr)
+    operands_t = tuple(flat)
+
+    return self._intern(("and", operands_t), _NAnd(operands_t))
+
+  def make_or(self, args: list[_Node]) -> _Node:
+    # Flatten nested disjunctions.
+    flat: list[_Node] = []
+    for x in args:
+      if isinstance(x, _NOr):
+        flat.extend(x.args)
+      else:
+        flat.append(x)
+
+    # Remove duplicated operands.
+    flat = list(set(flat))
+    assert not flat
+
+    if len(flat) == 1:
+      return flat[0]
+
+    flat.sort(key=repr)
+    operands_t = tuple(flat)
+
+    return self._intern(("or", operands_t), _NOr(operands_t))
+
+  def make_xor(self, a: _Node, b: _Node) -> _Node:
+    if repr(a) > repr(b):
+      a, b = b, a
+
+    return self._intern(("xor", a, b), _NXor(a, b))
+
+  # NNF conversion
+  # ----------------------------------------------------------------------------
+
+  def to_nnf(self, conn: ISent, polarity: bool = True) -> _Node:
     match conn:
       case Atom(IVar(i)):
-        return i
-      case Not(i):
-        return -i
-      case And(i, j):
-        k = self.fresh_index()
-        # k <=> i & j
-        # (i & j => k) & (k => i) & (k => j)
-        # (~i | ~j | k) & (~k | i) & (~k | j)
-        self.clauses.extend([[-i, -j, k], [-k, i], [-k, j]])
-        return k
-      case Xor(i, j):
-        k = self.fresh_index()
-        # k <=> i ^ j
-        # (i & ~j => k) & (~i & j => k) & (k => i | j) & (k => ~i | ~j)
-        # (~i | j | k) & (i | ~j | k) & (~k | i | j) & (~k | ~i | ~j)
-        self.clauses.extend([[-i, j, k], [i, -j, k], [-k, i, j], [-k, -i, -j]])
-        return k
-      case Or(i, j):
-        k = self.fresh_index()
-        # k <=> i | j
-        # (i => k) & (j => k) & (k => i | j)
-        # (~i | k) & (~j | k) & (~k | i | j)
-        self.clauses.extend([[-i, k], [-j, k], [-k, i, j]])
-        return k
-      case Cond(i, j):
-        k = self.fresh_index()
-        # k <=> (i => j)
-        # (k & i => j) & (~i => k) & (j => k)
-        # (~k | ~i | j) & (i | k) & (~j | k)
-        self.clauses.extend([[-k, -i, j], [i, k], [-j, k]])
-        return k
+        return self.atom(i) if polarity else _NLit(i, True)
 
-  def get_clauses(self) -> list[list[int]]:
-    k = fold(self.sent, self.step)
-    self.clauses.append([k])
+      case Not(i):
+        return self.to_nnf(i, not polarity)
+
+      case And(i, j):
+        if polarity:
+          return self.make_and([self.to_nnf(i, True), self.to_nnf(j, True)])
+        else:
+          return self.make_or([self.to_nnf(i, False), self.to_nnf(j, False)])
+
+      case Or(i, j):
+        if polarity:
+          return self.make_or([self.to_nnf(i, True), self.to_nnf(j, True)])
+        else:
+          return self.make_and([self.to_nnf(i, False), self.to_nnf(j, False)])
+
+      case Cond(i, j):
+        if polarity:
+          return self.make_or([self.to_nnf(i, False), self.to_nnf(j, True)])
+        else:
+          return self.make_and([self.to_nnf(i, True), self.to_nnf(j, False)])
+
+      case Xor(i, j):
+        if polarity:
+          return self.make_or(
+            [
+              self.make_and([self.to_nnf(i, True), self.to_nnf(j, False)]),
+              self.make_and([self.to_nnf(i, False), self.to_nnf(j, True)]),
+            ]
+          )
+        else:
+          return self.make_or(
+            [
+              self.make_and([self.to_nnf(i, True), self.to_nnf(j, True)]),
+              self.make_and([self.to_nnf(i, False), self.to_nnf(j, False)]),
+            ]
+          )
+
+  # Tseitin encoding
+  # ----------------------------------------------------------------------------
+
+  def encode(self, node: _Node) -> _NLit:
+    if isinstance(node, _NLit):
+      return node
+
+    old = self._vars.get(node)
+    if old is not None:
+      return _NLit(old)
+
+    k = self.fresh_index()
+    self._vars[node] = k
+
+    if isinstance(node, _NAnd):
+      xs = [self.encode(x) for x in node.args]
+
+      for x in xs:
+        self.clauses.append([-k, x.as_int()])
+
+      self.clauses.append([k] + [-x.as_int() for x in xs])
+
+    elif isinstance(node, _NOr):
+      xs = [self.encode(x) for x in node.args]
+
+      for x in xs:
+        self.clauses.append([-x.as_int(), k])
+
+      self.clauses.append([-k] + [x.as_int() for x in xs])
+
+    elif isinstance(node, _NXor):
+      a = self.encode(node.left)
+      b = self.encode(node.right)
+
+      self.clauses.extend(
+        [
+          [-a.as_int(), b.as_int(), k],
+          [a.as_int(), -b.as_int(), k],
+          [-k, a.as_int(), b.as_int()],
+          [-k, -a.as_int(), -b.as_int()],
+        ]
+      )
+
+    return _NLit(k)
+
+  def get_clauses(self) -> Clauses:
+    root = self.to_nnf(self.sent, True)
+    root_lit = self.encode(root)
+    self.clauses.append([root_lit.as_int()])
     return self.clauses
 
 
