@@ -380,7 +380,7 @@ def nindices(sent: ISent) -> int:
   """
   Returns the least number `n` such that the set of variable indices occuring in
   the I-sentence is contained in `{1, 2, ..., n}`. This can be used as an
-  alternative to `unique_atoms` specifically for I-sentences.
+  alternative to `variables` specifically for I-sentences.
   """
   result = 0
   for v in atoms(sent):
@@ -420,13 +420,21 @@ characters together with the underscore character `_`.
 
 def names(sent: NSent) -> set[str]:
   """
-  Returns the set of names occuring in a sentence whose atoms are named
+  Returns the set of variable names occuring in a sentence whose atoms are named
   variables.
   """
   return {v.name for v in atoms(sent)}
 
 
-def var(v: int | str) -> IVar | NVar:
+def variables(sent: Sent[NVar | IVar]) -> set[str | int]:
+  """
+  Returns the set of variable names and indices in a sentence whose atoms are
+  named and indexed variables.
+  """
+  return {(v.name if isinstance(v, NVar) else v.index) for v in atoms(sent)}
+
+
+def variable(v: int | str) -> IVar | NVar:
   return IVar(v) if isinstance(v, int) else NVar(v)
 
 
@@ -504,11 +512,13 @@ def into_named(
   """
   return map_atoms(
     indexed_sent,
-    lambda v: var(name_map.map_index(v.index)) if isinstance(v, IVar) else v,
+    lambda v: (
+      variable(name_map.map_index(v.index)) if isinstance(v, IVar) else v
+    ),
   )
 
 
-def into_indexed(named_sent: NSent) -> tuple[ISent, NameMap]:
+def into_indexed(named_sent: Sent[IVar | NVar]) -> tuple[ISent, NameMap]:
   """
   Convert a sentence with named variables into a sentence with indexed
   variables. Returns the converted sentence paired with a `NameMap` storing the
@@ -516,10 +526,13 @@ def into_indexed(named_sent: NSent) -> tuple[ISent, NameMap]:
   """
   # If the argument contained indexed variables, this function could identify
   # the indexed variables with named variables.
-  name_map = NameMap()
+  fresh_index = (
+    max(v.index for v in atoms(named_sent) if isinstance(v, IVar)) + 1
+  )
+  name_map = NameMap(fresh_index)
   indexed_sent = map_atoms(
     named_sent,
-    lambda v: IVar(name_map.map_name(v.name)),
+    lambda v: IVar(name_map.map_name(v.name)) if isinstance(v, NVar) else v,
   )
   return indexed_sent, name_map
 
@@ -533,76 +546,137 @@ def into_indexed(named_sent: NSent) -> tuple[ISent, NameMap]:
 # with indexed variables only.
 
 
+type Valuation = dict[str | int, bool]
+"""
+A valuation. See the documentation for `eval_sent`.
+"""
+
 type IValuation = dict[int, bool]
 
 
-def valuations(nvars: int) -> Generator[IValuation, None, None]:
+def valuations(vars: set[str | int]) -> Generator[Valuation]:
+  """
+  Generate all valuations on variables from the set `vars` (a set of variable
+  names of type `str` and indices of type `int`).
+  """
+  var_list = list(vars)
+  n = len(var_list)
+  for bits in itertools.product([False, True], repeat=n):
+    yield {var_list[i]: bits[i] for i in range(n)}
+
+
+def valuations_(nvars: int) -> Generator[IValuation]:
+  """
+  Generate all valuations on variables `#1, #2, ..., #n` where `#n` has index
+  `nvars` (that is, generate all valuations on the first `nvars` variables).
+  """
+  assert nvars >= 1
   for bits in itertools.product([False, True], repeat=nvars):
     yield {i: bits[i - 1] for i in range(1, nvars + 1)}
 
 
-def eval_step[A](conn: Conn[IVar, bool], vln: IValuation) -> bool:
+def eval_step[A](conn: Conn[NVar | IVar, bool], vln: Valuation) -> bool:
   """
-  A step in the evaluation of an I-sentence. Evaluates an atom or a connective
+  A step in the evaluation of a sentence. Evaluates an atom or a connective
   whose operands are evaluated (that is, connective which have boolean values
   in the position of the operands). See the documentations for `Conn` and
   `eval_sent`.
   """
   # fmt: off
   match conn:
-    case Atom(IVar(v)): return vln[v]
-    case Not(o):        return not o
-    case And(a, b):     return a and b
-    case Xor(a, b):     return a != b
-    case Or(a, b):      return a or b
-    case Cond(a, b):    return not a or b
+    case Atom(v):    return vln[v.name] if isinstance(v, NVar) else vln[v.index]
+    case Not(o):     return not o
+    case And(a, b):  return a and b
+    case Xor(a, b):  return a != b
+    case Or(a, b):   return a or b
+    case Cond(a, b): return not a or b
   # fmt: on
 
 
 # Python has already has a function named `eval`.
-def eval_sent(sent: ISent, vln: IValuation) -> bool:
+def eval_sent(sent: Sent, vln: Valuation) -> bool:
   """
-  Evaluates an I-sentence `sent` using a valuation `vln` of the variables. The
-  value of the argument `vln` should be a function `int -> bool` assigning
-  boolean values to variables indices. (`IValuation` is an alias for the type of
-  functions `int -> bool`.)
+  Evaluates an sentence `sent` using a valuation `vln` of the variables. The
+  value of the argument `vln` should be a valuation: That is, a `dict` with
+  keys of type `str | name` representing variable names and indices and values
+  of type `bool` representing the values for the corresponding variables.
   """
   return fold(sent, partial(eval_step, vln=vln))
 
 
-def check_sat(sent: ISent) -> bool:
+def eval_sent_(sent: ISent, vln: IValuation) -> bool:
   """
-  Check whether an I-sentence is satisfiable (evaluate to `True` on some
+  Like `eval_sent` but specifically for I-sentences and I-valuations.
+  """
+  # `eval_sent` does not add keys to `vln` which means that we can pretend that
+  # `IValuation <: Valuation` in this context.
+  return eval_sent(sent, cast(Valuation, vln))
+
+
+def check_sat(sent: Sent) -> bool:
+  """
+  Check whether a sentence is satisfiable (evaluates to `True` on some
   valuation).
   """
-  n = nindices(sent)
-  return any(eval_sent(sent, vln) for vln in valuations(n))
+  vars = variables(sent)
+  return any(eval_sent(sent, vln) for vln in valuations(vars))
 
 
-def check_taut(sent: ISent) -> bool:
+def check_sat_(sent: ISent) -> bool:
   """
-  Check whether an I-sentence is a tautology (evaluate to `True` on every
+  Like `check_sat` but specifically for I-sentences.
+  """
+  n = nindices(sent)
+  return any(eval_sent_(sent, vln) for vln in valuations_(n))
+
+
+def check_valid(sent: Sent) -> bool:
+  """
+  Check whether a sentence is a validity (evaluate to `True` on every
   valuation).
   """
-  n = nindices(sent)
-  return all(eval_sent(sent, vln) for vln in valuations(n))
+  vars = variables(sent)
+  return all(eval_sent(sent, vln) for vln in valuations(vars))
 
 
-def check_equiv(a: ISent, b: ISent) -> bool:
+def check_valid_(sent: ISent) -> bool:
   """
-  Check whether a pair of I-sentences are equivalent (evaluate to the same value
+  Like `check_valid` but specifically for I-sentences.
+  """
+  n = nindices(sent)
+  return all(eval_sent_(sent, vln) for vln in valuations_(n))
+
+
+def check_equiv(a: Sent, b: Sent) -> bool:
+  """
+  Check whether a pair of sentences are equivalent (evaluate to the same value
   on every valuation).
   """
-  n = max(nindices(a), nindices(b))
-  return all(eval_sent(a, vln) == eval_sent(b, vln) for vln in valuations(n))
+  vars = variables(a).union(variables(b))
+  return all(eval_sent(a, vln) == eval_sent(b, vln) for vln in valuations(vars))
 
 
-def check_equisat(a: ISent, b: ISent) -> bool:
+def check_equiv_(a: ISent, b: ISent) -> bool:
   """
-  Check whether a pair of I-sentences are equisatisfiable (both satisfiable or
+  Like `check_equiv` but specifically for I-sentences.
+  """
+  n = max(nindices(a), nindices(b))
+  return all(eval_sent_(a, vln) == eval_sent_(b, vln) for vln in valuations_(n))
+
+
+def check_equisat(a: Sent, b: Sent) -> bool:
+  """
+  Check whether a pair of sentences are equisatisfiable (both satisfiable or
   both unsatisfiable). Note that equisatisfiability is weaker than equivalence.
   """
   return check_sat(a) == check_sat(b)
+
+
+def check_equisat_(a: ISent, b: ISent) -> bool:
+  """
+  Like `check_equisat` but specifically for I-sentences.
+  """
+  return check_sat_(a) == check_sat_(b)
 
 
 # ==============================================================================
@@ -704,10 +778,10 @@ def _lexemes(s: str) -> Lexemes:
       continue
 
     # Named variables
-    if s[i].isalnum():
+    if s[i].isalnum() or s[i] == "_":
       name = s[i]
       i += 1
-      while i < len(s) and s[i].isalnum():
+      while i < len(s) and (s[i].isalnum() or s[i] == "_"):
         name += s[i]
         i += 1
       yield NVar(name)

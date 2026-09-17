@@ -13,7 +13,7 @@ from .. import (
   Xor,
   fold,
   fresh_index,
-  valuations,
+  valuations_,
 )
 
 # CNF representation
@@ -93,7 +93,7 @@ def solve_brute_force(clauses: Clauses) -> SolverResult:
   See the documentation on `SolverResult`.
   """
   n = nvars(clauses)
-  for vln in valuations(n):
+  for vln in valuations_(n):
     if eval_clauses(clauses, vln):
       return SolverResult(True, vln)
   return SolverResult(False, None)
