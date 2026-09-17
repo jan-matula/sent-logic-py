@@ -170,13 +170,13 @@ def fold[A, R](sent: Sent[A], f: Callable[[Conn[A, R]], R]) -> R:
   Suppose that `sent` is `Cond(And(Atom(a), Atom(b)), Atom(a))`. Then `fold`
   computes the size of `sent` as follows:
   ```
-  size(Cond(And(Atom(a), Atom(b)), Atom(a))) ~> …
-  • size(And(Atom(a), Atom(b))) ~> …
-    • size(Atom(a)) ~> size_step(Atom(a)) ~> 1
-    • size(Atom(b)) ~> size_step(Atom(b)) ~> 1
-    … ~> size_step(And(1, 1)) ~> 3
-    • size(Atom(a)) ~> size_step(Atom(a)) ~> 1
-    … ~> size_step(Cond(3, 1)) ~> 5
+  size(Cond(And(Atom(a), Atom(b)), Atom(a))) == …
+  • size(And(Atom(a), Atom(b))) == …
+    • size(Atom(a)) == size_step(Atom(a)) == 1
+    • size(Atom(b)) == size_step(Atom(b)) == 1
+    … == size_step(And(1, 1)) == 3
+    • size(Atom(a)) == size_step(Atom(a)) == 1
+    … == size_step(Cond(3, 1)) == 5
   ```
   """
   return f(map_operands(sent, partial(fold, f=f)))
