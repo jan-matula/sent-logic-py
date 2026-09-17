@@ -64,10 +64,16 @@ from typing import Literal, cast
 class Atom[A]:
   atom: A
 
+  def __str__(self: "Sent[NVar | IVar]"):
+    return display(self)
+
 
 @dataclass(frozen=True, slots=True)
 class Not[O]:
   operand: O
+
+  def __str__(self: "Sent[NVar | IVar]"):
+    return display(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,11 +81,17 @@ class And[L, R]:
   left: L
   right: R
 
+  def __str__(self: "Sent[NVar | IVar]"):
+    return display(self)
+
 
 @dataclass(frozen=True, slots=True)
 class Xor[L, R]:
   left: L
   right: R
+
+  def __str__(self: "Sent[NVar | IVar]"):
+    return display(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,11 +99,17 @@ class Or[L, R]:
   left: L
   right: R
 
+  def __str__(self: "Sent[NVar | IVar]"):
+    return display(self)
+
 
 @dataclass(frozen=True, slots=True)
 class Cond[L, R]:
   left: L
   right: R
+
+  def __str__(self: "Sent[NVar | IVar]"):
+    return display(self)
 
 
 # Sentences
@@ -376,23 +394,24 @@ type ILit = Lit[IVar]
 type ISentNNF = SentNNF[IVar]
 
 
-def nindices(sent: ISent) -> int:
+def nindices(*sents: ISent) -> int:
   """
   Returns the least number `n` such that the set of variable indices occuring in
   the I-sentence is contained in `{1, 2, ..., n}`. This can be used as an
   alternative to `variables` specifically for I-sentences.
   """
   result = 0
-  for v in atoms(sent):
-    result = max(result, v.index)
+  for sent in sents:
+    for v in atoms(sent):
+      result = max(result, v.index)
   return result
 
 
-def fresh_index(sent: ISent) -> int:
+def fresh_index(*sents: ISent) -> int:
   """
   Returns a variable index not occuring in the sentence.
   """
-  return nindices(sent) + 1
+  return nindices(*sents) + 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -418,20 +437,24 @@ characters together with the underscore character `_`.
 """
 
 
-def names(sent: NSent) -> set[str]:
+def names(*sents: NSent) -> set[str]:
   """
   Returns the set of variable names occuring in a sentence whose atoms are named
   variables.
   """
-  return {v.name for v in atoms(sent)}
+  return {v.name for sent in sents for v in atoms(sent)}
 
 
-def variables(sent: Sent[NVar | IVar]) -> set[str | int]:
+def variables(*sents: Sent[NVar | IVar]) -> set[str | int]:
   """
   Returns the set of variable names and indices in a sentence whose atoms are
   named and indexed variables.
   """
-  return {(v.name if isinstance(v, NVar) else v.index) for v in atoms(sent)}
+  return {
+    (v.name if isinstance(v, NVar) else v.index)
+    for sent in sents
+    for v in atoms(sent)
+  }
 
 
 def variable(v: int | str) -> IVar | NVar:
