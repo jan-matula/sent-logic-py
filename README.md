@@ -1,6 +1,7 @@
 ## Module outline
 
-(For documentation, see the docstrings in the source files themselves.)
+For documentation, see the docstrings in the source files themselves. For a more
+practical illustration of how the library can be used, see `Demo.ipynb`.
 
 The `sent_logic` module implements:
 
