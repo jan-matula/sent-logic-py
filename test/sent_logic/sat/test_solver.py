@@ -9,7 +9,7 @@ import unittest
 from sent_logic.sat import (
   Clause,
   Clauses,
-  eval_clauses,
+  eval_cnf,
   solve_brute_force,
 )
 
@@ -98,7 +98,7 @@ class TestSolverRandomChecked(unittest.TestCase):
           )
           assert result.vln is not None
           self.assertTrue(
-            eval_clauses(clauses, result.vln),
+            eval_cnf(clauses, result.vln),
             "Solver's assignment does not satisfy all clauses.\n"
             + f"clauses={clauses}\nsolver assignment={result.vln}",
           )
@@ -124,7 +124,7 @@ class TestSolverRandomUnchecked(unittest.TestCase):
         if result.sat:
           assert result.vln is not None
           self.assertTrue(
-            eval_clauses(clauses, result.vln),
+            eval_cnf(clauses, result.vln),
             "Solver's assignment does not satisfy all clauses.\n"
             + f"clauses={clauses}\nsolver assignment={result.vln}",
           )

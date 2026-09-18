@@ -152,8 +152,8 @@ class _Solver:
 
   def choose_guess(self) -> Lit:
     while self.var_order:
-      _, var = heapq.heappop(self.var_order)
-      if var not in self.assign_table:
+      neg_score, var = heapq.heappop(self.var_order)
+      if var not in self.assign_table and neg_score == -self.var_scores[var]:
         return self.save_table.get(var, var)
 
     # Should be unreachable.
@@ -297,8 +297,7 @@ class _Solver:
     while self.assign_stack and self.assign_stack[-1].level > level:
       info = self.assign_stack.pop()
       var = abs(info.lit)
-      if info.reason is None:
-        heapq.heappush(self.var_order, (-self.var_scores[var], var))
+      heapq.heappush(self.var_order, (-self.var_scores[var], var))
       self.save_table[var] = info.lit
       del self.assign_table[var]
       del self.level_table[var]
@@ -337,13 +336,10 @@ class _Solver:
         self.clauses.append(analysis.learned_clause)
         if analysis.backtrack_level > 0:
           assert analysis.snd_lit != None
-          clause_index = len(self.clauses)
-          self.clauses.append(analysis.learned_clause)
           self.watched_table[analysis.uip_lit].add(clause_index)
           self.watched_table[analysis.snd_lit].add(clause_index)
 
         self.assign_deduced(analysis.uip_lit, reason=clause_index)
-        self.update_queue.append(analysis.uip_lit)
 
   @staticmethod
   def into_valuation(assign_table: dict[Var, Lit]) -> dict[Var, bool]:

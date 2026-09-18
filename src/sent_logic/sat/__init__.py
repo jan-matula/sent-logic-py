@@ -46,12 +46,12 @@ The empty CNF is always true and the empty clause is always false. Therefore,
 """
 
 
-def nvars(clauses: Clauses) -> int:
+def nvars(*cnfs: Clauses) -> int:
   """
   Returns the least number `n` such that the variables occurring in the clauses
   are among `{1, 2, ..., n}`.
   """
-  return max(abs(lit) for clause in clauses for lit in clause)
+  return max(abs(lit) for cnf in cnfs for clause in cnf for lit in clause)
 
 
 # Basic syntactical operations
@@ -64,7 +64,13 @@ def cnf_or(cnf1: Clauses, cnf2: Clauses) -> Clauses:
   resulting CNF has `n * m` clauses when the arguments have `n` and `m` clauses
   respectively.
   """
-  return [clause1 + clause2 for clause1 in cnf1 for clause2 in cnf2]
+
+  return [
+    clause1 + clause2
+    for clause1 in cnf1
+    for clause2 in cnf2
+    if all(-lit not in clause2 for lit in clause1)
+  ]
 
 
 def into_cnf(sent: ISent) -> Clauses:
@@ -98,7 +104,7 @@ def eval_lit(lit: Lit, vln: IValuation) -> bool:
   return vln[abs(lit)] == (lit > 0)
 
 
-def eval_clauses(clauses: Clauses, vln: IValuation) -> bool:
+def eval_cnf(clauses: Clauses, vln: IValuation) -> bool:
   """
   Evaluates a CNF relative to a valuation.
   """
@@ -127,7 +133,7 @@ def solve_brute_force(clauses: Clauses) -> SolverResult:
   """
   n = nvars(clauses)
   for vln in valuations_(n):
-    if eval_clauses(clauses, vln):
+    if eval_cnf(clauses, vln):
       return SolverResult(True, vln)
   return SolverResult(False, None)
 
@@ -241,7 +247,7 @@ class _CNFConverter:
 
     # Remove duplicated operands.
     flat = list(set(flat))
-    assert not flat
+    assert flat
 
     if len(flat) == 1:
       return flat[0]
@@ -354,7 +360,7 @@ class _CNFConverter:
     return self.clauses
 
 
-def into_clauses(sent: ISent) -> Clauses:
+def into_equisat_cnf(sent: ISent) -> Clauses:
   """
   Convert a sentence into an equisatisfiable CNF. The size of the CNF and the
   number of variables in the CNF are linear in the size of the sentence. Note
