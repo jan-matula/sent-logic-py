@@ -159,7 +159,8 @@ class _Solver:
         return
 
     # We have a unit clause!
-    self.assign_deduced(other_watched_lit)
+    if other_watched_lit != 0:
+      self.assign_deduced(other_watched_lit)
 
   # Backtracking
   # ----------------------------------------------------------------------------
